@@ -405,6 +405,22 @@
                 </div>
 
                 <div class="section" style="margin-top: 25px;">
+                    <div class="section-title">Wildcard Options</div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer;">
+                            <input type="checkbox" id="wildcardEmails" onchange="saveWildcardSettings()"
+                                   style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">All Emails</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="wildcardPhones" onchange="saveWildcardSettings()"
+                                   style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">All Phone Numbers</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section">
                     <div class="section-title">Current Mappings</div>
                     <div class="mapping-editor" id="mappingEditor">
                         <!-- Mapping editor will be rendered here -->
@@ -458,6 +474,10 @@
         // Data storage
         let mappingSets = {};
         let currentSetId = null;
+        let wildcardSettings = {
+            emails: false,
+            phones: false
+        };
 
         // Initialize app
         function init() {
@@ -468,6 +488,7 @@
             } else {
                 renderEmptyEditor();
             }
+            loadWildcardSettings();
         }
 
         // Storage functions
@@ -477,15 +498,29 @@
                 const data = JSON.parse(stored);
                 mappingSets = data.mappingSets || {};
                 currentSetId = data.currentSetId || null;
+                wildcardSettings = data.wildcardSettings || { emails: false, phones: false };
             }
         }
 
         function saveToStorage() {
             const data = {
                 mappingSets: mappingSets,
-                currentSetId: currentSetId
+                currentSetId: currentSetId,
+                wildcardSettings: wildcardSettings
             };
             localStorage.setItem('promptSanitizerData', JSON.stringify(data));
+        }
+
+        // Wildcard settings functions
+        function loadWildcardSettings() {
+            document.getElementById('wildcardEmails').checked = wildcardSettings.emails;
+            document.getElementById('wildcardPhones').checked = wildcardSettings.phones;
+        }
+
+        function saveWildcardSettings() {
+            wildcardSettings.emails = document.getElementById('wildcardEmails').checked;
+            wildcardSettings.phones = document.getElementById('wildcardPhones').checked;
+            saveToStorage();
         }
 
         // Render functions
@@ -650,14 +685,38 @@
             }
 
             const mappings = getCurrentMappings();
-            if (mappings.length === 0) {
-                showToast('Please add at least one complete mapping', 'warning');
+            const hasWildcards = wildcardSettings.emails || wildcardSettings.phones;
+
+            if (mappings.length === 0 && !hasWildcards) {
+                showToast('Please add at least one complete mapping or enable wildcards', 'warning');
                 return;
             }
 
             let result = inputText;
             let count = 0;
 
+            // Process wildcard emails
+            if (wildcardSettings.emails) {
+                const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+                const matches = result.match(emailRegex);
+                if (matches) {
+                    count += matches.length;
+                    result = result.replace(emailRegex, '[email]');
+                }
+            }
+
+            // Process wildcard phone numbers (US formats)
+            if (wildcardSettings.phones) {
+                // Matches formats: (123) 456-7890, 123-456-7890, 123.456.7890, 1234567890
+                const phoneRegex = /\b(?:\(\d{3}\)\s?|\d{3}[-.\s]?)\d{3}[-.\s]?\d{4}\b/g;
+                const matches = result.match(phoneRegex);
+                if (matches) {
+                    count += matches.length;
+                    result = result.replace(phoneRegex, '[phone]');
+                }
+            }
+
+            // Process explicit mappings
             for (const mapping of mappings) {
                 const regex = new RegExp(escapeRegex(mapping.original), 'g');
                 const matches = result.match(regex);
