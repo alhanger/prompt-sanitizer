@@ -259,6 +259,38 @@
             border-color: #71a9bf;
         }
 
+        #outputDisplay {
+            width: 100%;
+            min-height: 240px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background: white;
+            color: #000;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+        }
+
+        .highlight {
+            background-color: #eaff03;
+            color: #09121f;
+            padding: 2px 4px;
+            border-radius: 3px;
+            animation: fadeOut 2s ease-in-out forwards;
+        }
+
+        @keyframes fadeOut {
+            0% {
+                background-color: #eaff03;
+            }
+            100% {
+                background-color: transparent;
+            }
+        }
+
         .buttons {
             display: flex;
             gap: 12px;
@@ -453,7 +485,8 @@
 
                 <div class="section">
                     <div class="section-title">Output</div>
-                    <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly></textarea>
+                    <div id="outputDisplay"></div>
+                    <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly style="display: none;"></textarea>
                 </div>
 
                 <div class="stats">
@@ -696,6 +729,7 @@
 
             let result = inputText;
             let count = 0;
+            let highlightedResult = escapeHtml(inputText);
 
             // Process wildcard emails
             if (wildcardSettings.emails) {
@@ -704,6 +738,7 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(emailRegex, '[email]');
+                    highlightedResult = highlightedResult.replace(emailRegex, '<span class="highlight">[email]</span>');
                 }
             }
 
@@ -715,6 +750,7 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(phoneRegex, '[phone]');
+                    highlightedResult = highlightedResult.replace(phoneRegex, '<span class="highlight">[phone]</span>');
                 }
             }
 
@@ -725,10 +761,16 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(regex, mapping.replacement);
+                    const escapedReplacement = escapeHtml(mapping.replacement);
+                    highlightedResult = highlightedResult.replace(
+                        new RegExp(escapeRegex(escapeHtml(mapping.original)), 'g'),
+                        `<span class="highlight">${escapedReplacement}</span>`
+                    );
                 }
             }
 
             document.getElementById('outputText').value = result;
+            displayOutput(highlightedResult);
             document.getElementById('replacementCount').textContent = count;
             showToast(`✓ Sanitized! ${count} replacement(s) made`, 'success');
         }
@@ -748,6 +790,7 @@
 
             let result = inputText;
             let count = 0;
+            let highlightedResult = escapeHtml(inputText);
 
             for (const mapping of mappings) {
                 const regex = new RegExp(escapeRegex(mapping.replacement), 'g');
@@ -755,16 +798,33 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(regex, mapping.original);
+                    const escapedOriginal = escapeHtml(mapping.original);
+                    highlightedResult = highlightedResult.replace(
+                        new RegExp(escapeRegex(escapeHtml(mapping.replacement)), 'g'),
+                        `<span class="highlight">${escapedOriginal}</span>`
+                    );
                 }
             }
 
             document.getElementById('outputText').value = result;
+            displayOutput(highlightedResult);
             document.getElementById('replacementCount').textContent = count;
             showToast(`✓ Desanitized! ${count} replacement(s) made`, 'success');
         }
 
         function escapeRegex(string) {
             return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function displayOutput(htmlContent) {
+            const outputDisplay = document.getElementById('outputDisplay');
+            outputDisplay.innerHTML = htmlContent || '<span style="color: #999;">Results will appear here...</span>';
         }
 
         function copyOutput() {
@@ -784,6 +844,7 @@
         function clearAll() {
             document.getElementById('inputText').value = '';
             document.getElementById('outputText').value = '';
+            displayOutput('');
             document.getElementById('replacementCount').textContent = '0';
             showToast('✓ Cleared all fields', 'success');
         }
