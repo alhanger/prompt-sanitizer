@@ -73,17 +73,6 @@
             padding: 30px;
         }
 
-        .main-scroll.side-by-side {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .main-scroll.side-by-side .io-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
         .section {
             margin-bottom: 25px;
         }
@@ -302,10 +291,12 @@
 
         .text-container {
             width: 100%;
+            max-width: 100%;
             position: relative;
-            resize: vertical;
-            overflow: hidden;
+            resize: both;
+            overflow: auto;
             min-height: 240px;
+            min-width: 200px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
         }
@@ -321,8 +312,9 @@
             color: #000;
             white-space: pre-wrap;
             word-wrap: break-word;
-            overflow-y: auto;
+            overflow: auto;
             border: none;
+            box-sizing: border-box;
         }
 
         #inputDisplay {
@@ -332,21 +324,10 @@
         .text-container textarea {
             border: none;
             border-radius: 0;
-        }
-
-        #outputDisplay {
             width: 100%;
+            height: 100%;
             min-height: 240px;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            background: white;
-            color: #000;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-y: auto;
+            box-sizing: border-box;
         }
 
         .highlight {
@@ -576,29 +557,22 @@
                                style="width: 18px; height: 18px; cursor: pointer; accent-color: #71a9bf;">
                         <span style="font-weight: 500; color: #09121f;">Persist Highlighting</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="sideBySideLayout" onchange="toggleLayout()"
-                               style="width: 18px; height: 18px; cursor: pointer; accent-color: #71a9bf;">
-                        <span style="font-weight: 500; color: #09121f;">Side-by-Side Layout</span>
-                    </label>
                 </div>
 
-                <div class="io-container">
-                    <div class="section">
-                        <div class="section-title">Input Text</div>
-                        <div class="text-container" id="inputContainer">
-                            <div id="inputDisplay" class="text-display"></div>
-                            <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
-                        </div>
+                <div class="section">
+                    <div class="section-title">Input Text</div>
+                    <div class="text-container" id="inputContainer">
+                        <div id="inputDisplay" class="text-display"></div>
+                        <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
                     </div>
+                </div>
 
-                    <div class="section">
-                        <div class="section-title">Output</div>
-                        <div class="text-container" id="outputContainer">
-                            <div id="outputDisplay"></div>
-                        </div>
-                        <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly style="display: none;"></textarea>
+                <div class="section">
+                    <div class="section-title">Output</div>
+                    <div class="text-container" id="outputContainer">
+                        <div id="outputDisplay"></div>
                     </div>
+                    <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly style="display: none;"></textarea>
                 </div>
 
                 <div class="stats">
@@ -627,7 +601,6 @@
         };
         let mappingsCollapsed = false;
         let persistHighlight = false;
-        let sideBySideLayout = false;
 
         // Initialize app
         function init() {
@@ -641,7 +614,6 @@
             loadWildcardSettings();
             updateMappingsCollapseState();
             loadPersistHighlightSetting();
-            loadLayoutSetting();
         }
 
         // Storage functions
@@ -654,7 +626,6 @@
                 wildcardSettings = data.wildcardSettings || { emails: false, phones: false };
                 mappingsCollapsed = data.mappingsCollapsed || false;
                 persistHighlight = data.persistHighlight || false;
-                sideBySideLayout = data.sideBySideLayout || false;
             }
         }
 
@@ -664,8 +635,7 @@
                 currentSetId: currentSetId,
                 wildcardSettings: wildcardSettings,
                 mappingsCollapsed: mappingsCollapsed,
-                persistHighlight: persistHighlight,
-                sideBySideLayout: sideBySideLayout
+                persistHighlight: persistHighlight
             };
             localStorage.setItem('promptSanitizerData', JSON.stringify(data));
         }
@@ -690,27 +660,6 @@
         function savePersistHighlightSetting() {
             persistHighlight = document.getElementById('persistHighlight').checked;
             saveToStorage();
-        }
-
-        // Layout toggle
-        function loadLayoutSetting() {
-            document.getElementById('sideBySideLayout').checked = sideBySideLayout;
-            applyLayoutSetting();
-        }
-
-        function toggleLayout() {
-            sideBySideLayout = document.getElementById('sideBySideLayout').checked;
-            applyLayoutSetting();
-            saveToStorage();
-        }
-
-        function applyLayoutSetting() {
-            const mainScroll = document.getElementById('mainScroll');
-            if (sideBySideLayout) {
-                mainScroll.classList.add('side-by-side');
-            } else {
-                mainScroll.classList.remove('side-by-side');
-            }
         }
 
         // Collapse/expand mappings section
