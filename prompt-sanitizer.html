@@ -95,6 +95,36 @@
             border-radius: 2px;
         }
 
+        .section-title.collapsable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-title.collapsable:hover {
+            opacity: 0.8;
+        }
+
+        .collapse-icon {
+            margin-left: auto;
+            font-size: 0.8em;
+            transition: transform 0.3s;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .collapsable-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        }
+
+        .collapsable-content.collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+            margin: 0 !important;
+        }
+
         .mapping-sets {
             margin-bottom: 20px;
         }
@@ -464,11 +494,16 @@
                 </div>
 
                 <div class="section">
-                    <div class="section-title">Current Mappings</div>
-                    <div class="mapping-editor" id="mappingEditor">
-                        <!-- Mapping editor will be rendered here -->
+                    <div class="section-title collapsable" onclick="toggleMappingsCollapse()">
+                        Current Mappings
+                        <span class="collapse-icon" id="mappingsCollapseIcon">▼</span>
                     </div>
-                    <button class="btn-add-mapping" onclick="addMapping()">+ Add Mapping</button>
+                    <div class="collapsable-content" id="mappingsCollapsableContent">
+                        <div class="mapping-editor" id="mappingEditor">
+                            <!-- Mapping editor will be rendered here -->
+                        </div>
+                        <button class="btn-add-mapping" onclick="addMapping()">+ Add Mapping</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -522,6 +557,7 @@
             emails: false,
             phones: false
         };
+        let mappingsCollapsed = false;
 
         // Initialize app
         function init() {
@@ -533,6 +569,7 @@
                 renderEmptyEditor();
             }
             loadWildcardSettings();
+            updateMappingsCollapseState();
         }
 
         // Storage functions
@@ -543,6 +580,7 @@
                 mappingSets = data.mappingSets || {};
                 currentSetId = data.currentSetId || null;
                 wildcardSettings = data.wildcardSettings || { emails: false, phones: false };
+                mappingsCollapsed = data.mappingsCollapsed || false;
             }
         }
 
@@ -550,7 +588,8 @@
             const data = {
                 mappingSets: mappingSets,
                 currentSetId: currentSetId,
-                wildcardSettings: wildcardSettings
+                wildcardSettings: wildcardSettings,
+                mappingsCollapsed: mappingsCollapsed
             };
             localStorage.setItem('promptSanitizerData', JSON.stringify(data));
         }
@@ -565,6 +604,28 @@
             wildcardSettings.emails = document.getElementById('wildcardEmails').checked;
             wildcardSettings.phones = document.getElementById('wildcardPhones').checked;
             saveToStorage();
+        }
+
+        // Collapse/expand mappings section
+        function toggleMappingsCollapse() {
+            mappingsCollapsed = !mappingsCollapsed;
+            updateMappingsCollapseState();
+            saveToStorage();
+        }
+
+        function updateMappingsCollapseState() {
+            const content = document.getElementById('mappingsCollapsableContent');
+            const icon = document.getElementById('mappingsCollapseIcon');
+
+            if (mappingsCollapsed) {
+                content.classList.add('collapsed');
+                icon.classList.add('collapsed');
+            } else {
+                content.classList.remove('collapsed');
+                icon.classList.remove('collapsed');
+                // Set max-height to allow smooth transition
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }
         }
 
         // Render functions
@@ -598,21 +659,23 @@
             if (!set || set.mappings.length === 0) {
                 container.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No mappings yet. Add one below!</div>';
                 updateMappingCount();
+                updateMappingsCollapseState();
                 return;
             }
 
             container.innerHTML = set.mappings.map((mapping, index) => `
                 <div class="mapping-row">
-                    <input type="text" class="mapping-input" value="${mapping.original}" 
+                    <input type="text" class="mapping-input" value="${mapping.original}"
                            onchange="updateMapping(${index}, 'original', this.value)" placeholder="Original text">
                     <span class="arrow">→</span>
-                    <input type="text" class="mapping-input" value="${mapping.replacement}" 
+                    <input type="text" class="mapping-input" value="${mapping.replacement}"
                            onchange="updateMapping(${index}, 'replacement', this.value)" placeholder="Replacement">
                     <button class="btn-remove-mapping" onclick="removeMapping(${index})">×</button>
                 </div>
             `).join('');
 
             updateMappingCount();
+            updateMappingsCollapseState();
         }
 
         function renderEmptyEditor() {
@@ -781,9 +844,12 @@
                 return;
             }
 
+            const currentMappings = mappingSets[currentSetId].mappings;
+            const nextRefNumber = currentMappings.length + 1;
+
             mappingSets[currentSetId].mappings.push({
                 original: '',
-                replacement: ''
+                replacement: `{ref ${nextRefNumber}}`
             });
 
             saveToStorage();
@@ -866,16 +932,19 @@
                 }
             }
 
-            // Process explicit mappings
-            for (const mapping of mappings) {
-                const regex = new RegExp(escapeRegex(mapping.original), 'g');
+            // Process explicit mappings (case insensitive)
+            // Sort by length (longest first) to handle overlapping patterns correctly
+            const sortedMappings = [...mappings].sort((a, b) => b.original.length - a.original.length);
+
+            for (const mapping of sortedMappings) {
+                const regex = new RegExp(escapeRegex(mapping.original), 'gi');
                 const matches = result.match(regex);
                 if (matches) {
                     count += matches.length;
                     result = result.replace(regex, mapping.replacement);
                     const escapedReplacement = escapeHtml(mapping.replacement);
                     highlightedResult = highlightedResult.replace(
-                        new RegExp(escapeRegex(escapeHtml(mapping.original)), 'g'),
+                        new RegExp(escapeRegex(escapeHtml(mapping.original)), 'gi'),
                         `<span class="highlight">${escapedReplacement}</span>`
                     );
                 }
