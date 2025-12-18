@@ -73,6 +73,17 @@
             padding: 30px;
         }
 
+        .main-scroll.side-by-side {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-scroll.side-by-side .io-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
         .section {
             margin-bottom: 25px;
         }
@@ -216,7 +227,7 @@
             background: #ffffff;
             padding: 15px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-top: 10px;
         }
 
         .mapping-row {
@@ -289,6 +300,40 @@
             border-color: #71a9bf;
         }
 
+        .text-container {
+            width: 100%;
+            position: relative;
+            resize: vertical;
+            overflow: hidden;
+            min-height: 240px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .text-display {
+            width: 100%;
+            height: 100%;
+            min-height: 240px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background: white;
+            color: #000;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            border: none;
+        }
+
+        #inputDisplay {
+            display: none;
+        }
+
+        .text-container textarea {
+            border: none;
+            border-radius: 0;
+        }
+
         #outputDisplay {
             width: 100%;
             min-height: 240px;
@@ -309,6 +354,9 @@
             color: #09121f;
             padding: 2px 4px;
             border-radius: 3px;
+        }
+
+        .highlight.fade {
             animation: fadeOut 2s ease-in-out forwards;
         }
 
@@ -499,10 +547,10 @@
                         <span class="collapse-icon" id="mappingsCollapseIcon">▼</span>
                     </div>
                     <div class="collapsable-content" id="mappingsCollapsableContent">
+                        <button class="btn-add-mapping" onclick="addMapping()">+ Add Mapping</button>
                         <div class="mapping-editor" id="mappingEditor">
                             <!-- Mapping editor will be rendered here -->
                         </div>
-                        <button class="btn-add-mapping" onclick="addMapping()">+ Add Mapping</button>
                     </div>
                 </div>
             </div>
@@ -514,12 +562,7 @@
                 <h1>🔒 Prompt Sanitizer/Desanitizer</h1>
                 <p>Sanitize sensitive information or restore original text</p>
             </div>
-            <div class="main-scroll">
-                <div class="section">
-                    <div class="section-title">Input Text</div>
-                    <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
-                </div>
-
+            <div class="main-scroll" id="mainScroll">
                 <div class="buttons">
                     <button class="btn-sanitize" onclick="sanitize()">🔒 Sanitize</button>
                     <button class="btn-desanitize" onclick="desanitize()">🔓 Desanitize</button>
@@ -527,10 +570,35 @@
                     <button class="btn-clear" onclick="clearAll()">🗑️ Clear All</button>
                 </div>
 
-                <div class="section">
-                    <div class="section-title">Output</div>
-                    <div id="outputDisplay"></div>
-                    <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly style="display: none;"></textarea>
+                <div style="display: flex; gap: 15px; margin-top: 15px; margin-bottom: 20px; align-items: center;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="persistHighlight" onchange="savePersistHighlightSetting()"
+                               style="width: 18px; height: 18px; cursor: pointer; accent-color: #71a9bf;">
+                        <span style="font-weight: 500; color: #09121f;">Persist Highlighting</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="sideBySideLayout" onchange="toggleLayout()"
+                               style="width: 18px; height: 18px; cursor: pointer; accent-color: #71a9bf;">
+                        <span style="font-weight: 500; color: #09121f;">Side-by-Side Layout</span>
+                    </label>
+                </div>
+
+                <div class="io-container">
+                    <div class="section">
+                        <div class="section-title">Input Text</div>
+                        <div class="text-container" id="inputContainer">
+                            <div id="inputDisplay" class="text-display"></div>
+                            <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Output</div>
+                        <div class="text-container" id="outputContainer">
+                            <div id="outputDisplay"></div>
+                        </div>
+                        <textarea id="outputText" rows="10" placeholder="Results will appear here..." readonly style="display: none;"></textarea>
+                    </div>
                 </div>
 
                 <div class="stats">
@@ -558,6 +626,8 @@
             phones: false
         };
         let mappingsCollapsed = false;
+        let persistHighlight = false;
+        let sideBySideLayout = false;
 
         // Initialize app
         function init() {
@@ -570,6 +640,8 @@
             }
             loadWildcardSettings();
             updateMappingsCollapseState();
+            loadPersistHighlightSetting();
+            loadLayoutSetting();
         }
 
         // Storage functions
@@ -581,6 +653,8 @@
                 currentSetId = data.currentSetId || null;
                 wildcardSettings = data.wildcardSettings || { emails: false, phones: false };
                 mappingsCollapsed = data.mappingsCollapsed || false;
+                persistHighlight = data.persistHighlight || false;
+                sideBySideLayout = data.sideBySideLayout || false;
             }
         }
 
@@ -589,7 +663,9 @@
                 mappingSets: mappingSets,
                 currentSetId: currentSetId,
                 wildcardSettings: wildcardSettings,
-                mappingsCollapsed: mappingsCollapsed
+                mappingsCollapsed: mappingsCollapsed,
+                persistHighlight: persistHighlight,
+                sideBySideLayout: sideBySideLayout
             };
             localStorage.setItem('promptSanitizerData', JSON.stringify(data));
         }
@@ -604,6 +680,37 @@
             wildcardSettings.emails = document.getElementById('wildcardEmails').checked;
             wildcardSettings.phones = document.getElementById('wildcardPhones').checked;
             saveToStorage();
+        }
+
+        // Persist highlight setting
+        function loadPersistHighlightSetting() {
+            document.getElementById('persistHighlight').checked = persistHighlight;
+        }
+
+        function savePersistHighlightSetting() {
+            persistHighlight = document.getElementById('persistHighlight').checked;
+            saveToStorage();
+        }
+
+        // Layout toggle
+        function loadLayoutSetting() {
+            document.getElementById('sideBySideLayout').checked = sideBySideLayout;
+            applyLayoutSetting();
+        }
+
+        function toggleLayout() {
+            sideBySideLayout = document.getElementById('sideBySideLayout').checked;
+            applyLayoutSetting();
+            saveToStorage();
+        }
+
+        function applyLayoutSetting() {
+            const mainScroll = document.getElementById('mainScroll');
+            if (sideBySideLayout) {
+                mainScroll.classList.add('side-by-side');
+            } else {
+                mainScroll.classList.remove('side-by-side');
+            }
         }
 
         // Collapse/expand mappings section
@@ -847,7 +954,8 @@
             const currentMappings = mappingSets[currentSetId].mappings;
             const nextRefNumber = currentMappings.length + 1;
 
-            mappingSets[currentSetId].mappings.push({
+            // Insert at the beginning of the array
+            mappingSets[currentSetId].mappings.unshift({
                 original: '',
                 replacement: `{ref ${nextRefNumber}}`
             });
@@ -907,6 +1015,8 @@
 
             let result = inputText;
             let count = 0;
+            const highlightClass = persistHighlight ? 'highlight' : 'highlight fade';
+            let highlightedInput = escapeHtml(inputText);
             let highlightedResult = escapeHtml(inputText);
 
             // Process wildcard emails
@@ -916,7 +1026,8 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(emailRegex, '[email]');
-                    highlightedResult = highlightedResult.replace(emailRegex, '<span class="highlight">[email]</span>');
+                    highlightedInput = highlightedInput.replace(emailRegex, `<span class="${highlightClass}">$&</span>`);
+                    highlightedResult = highlightedResult.replace(emailRegex, `<span class="${highlightClass}">[email]</span>`);
                 }
             }
 
@@ -928,7 +1039,8 @@
                 if (matches) {
                     count += matches.length;
                     result = result.replace(phoneRegex, '[phone]');
-                    highlightedResult = highlightedResult.replace(phoneRegex, '<span class="highlight">[phone]</span>');
+                    highlightedInput = highlightedInput.replace(phoneRegex, `<span class="${highlightClass}">$&</span>`);
+                    highlightedResult = highlightedResult.replace(phoneRegex, `<span class="${highlightClass}">[phone]</span>`);
                 }
             }
 
@@ -943,14 +1055,19 @@
                     count += matches.length;
                     result = result.replace(regex, mapping.replacement);
                     const escapedReplacement = escapeHtml(mapping.replacement);
+                    highlightedInput = highlightedInput.replace(
+                        new RegExp(escapeRegex(escapeHtml(mapping.original)), 'gi'),
+                        `<span class="${highlightClass}">$&</span>`
+                    );
                     highlightedResult = highlightedResult.replace(
                         new RegExp(escapeRegex(escapeHtml(mapping.original)), 'gi'),
-                        `<span class="highlight">${escapedReplacement}</span>`
+                        `<span class="${highlightClass}">${escapedReplacement}</span>`
                     );
                 }
             }
 
             document.getElementById('outputText').value = result;
+            displayInput(highlightedInput);
             displayOutput(highlightedResult);
             document.getElementById('replacementCount').textContent = count;
             showToast(`✓ Sanitized! ${count} replacement(s) made`, 'success');
@@ -971,6 +1088,8 @@
 
             let result = inputText;
             let count = 0;
+            const highlightClass = persistHighlight ? 'highlight' : 'highlight fade';
+            let highlightedInput = escapeHtml(inputText);
             let highlightedResult = escapeHtml(inputText);
 
             for (const mapping of mappings) {
@@ -980,14 +1099,19 @@
                     count += matches.length;
                     result = result.replace(regex, mapping.original);
                     const escapedOriginal = escapeHtml(mapping.original);
+                    highlightedInput = highlightedInput.replace(
+                        new RegExp(escapeRegex(escapeHtml(mapping.replacement)), 'g'),
+                        `<span class="${highlightClass}">$&</span>`
+                    );
                     highlightedResult = highlightedResult.replace(
                         new RegExp(escapeRegex(escapeHtml(mapping.replacement)), 'g'),
-                        `<span class="highlight">${escapedOriginal}</span>`
+                        `<span class="${highlightClass}">${escapedOriginal}</span>`
                     );
                 }
             }
 
             document.getElementById('outputText').value = result;
+            displayInput(highlightedInput);
             displayOutput(highlightedResult);
             document.getElementById('replacementCount').textContent = count;
             showToast(`✓ Desanitized! ${count} replacement(s) made`, 'success');
@@ -1003,9 +1127,37 @@
             return div.innerHTML;
         }
 
+        function displayInput(htmlContent) {
+            const inputDisplay = document.getElementById('inputDisplay');
+            const inputTextarea = document.getElementById('inputText');
+            const inputContainer = document.getElementById('inputContainer');
+
+            if (htmlContent && htmlContent.trim()) {
+                inputDisplay.innerHTML = htmlContent;
+                inputDisplay.style.display = 'block';
+                inputTextarea.style.display = 'none';
+                // Match the container height to the textarea's previous height
+                const textareaHeight = inputTextarea.offsetHeight;
+                if (textareaHeight > 0) {
+                    inputContainer.style.height = textareaHeight + 'px';
+                }
+            } else {
+                inputDisplay.style.display = 'none';
+                inputTextarea.style.display = 'block';
+                inputContainer.style.height = '';
+            }
+        }
+
         function displayOutput(htmlContent) {
             const outputDisplay = document.getElementById('outputDisplay');
+            const outputContainer = document.getElementById('outputContainer');
             outputDisplay.innerHTML = htmlContent || '<span style="color: #999;">Results will appear here...</span>';
+
+            // Match the output container height to input container if needed
+            const inputContainer = document.getElementById('inputContainer');
+            if (inputContainer && inputContainer.style.height) {
+                outputContainer.style.height = inputContainer.style.height;
+            }
         }
 
         function copyOutput() {
@@ -1025,6 +1177,7 @@
         function clearAll() {
             document.getElementById('inputText').value = '';
             document.getElementById('outputText').value = '';
+            displayInput('');
             displayOutput('');
             document.getElementById('replacementCount').textContent = '0';
             showToast('✓ Cleared all fields', 'success');
