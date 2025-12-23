@@ -319,6 +319,14 @@
 
         #inputDisplay {
             display: none;
+            cursor: pointer;
+        }
+
+        #inputDisplay:hover::after {
+            content: ' (click to edit)';
+            font-size: 0.85em;
+            color: #71a9bf;
+            font-style: italic;
         }
 
         #outputDisplay {
@@ -562,7 +570,7 @@
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="persistHighlight" onchange="savePersistHighlightSetting()"
                                style="width: 18px; height: 18px; cursor: pointer; accent-color: #71a9bf;">
-                        <span style="font-weight: 500; color: #09121f;">Persist Highlighting</span>
+                        <span style="font-weight: 500; color: #09121f;">Highlight</span>
                     </label>
                 </div>
 
@@ -1097,11 +1105,28 @@
                 if (textareaHeight > 0) {
                     inputContainer.style.height = textareaHeight + 'px';
                 }
+
+                // Add click handler to restore editing capability
+                inputDisplay.onclick = function() {
+                    restoreInputEditing();
+                };
             } else {
                 inputDisplay.style.display = 'none';
                 inputTextarea.style.display = 'block';
                 inputContainer.style.height = '';
+                inputDisplay.onclick = null;
             }
+        }
+
+        function restoreInputEditing() {
+            const inputDisplay = document.getElementById('inputDisplay');
+            const inputTextarea = document.getElementById('inputText');
+            const inputContainer = document.getElementById('inputContainer');
+
+            inputDisplay.style.display = 'none';
+            inputTextarea.style.display = 'block';
+            inputContainer.style.height = '';
+            inputTextarea.focus();
         }
 
         function displayOutput(htmlContent) {
