@@ -319,14 +319,34 @@
 
         #inputDisplay {
             display: none;
-            cursor: pointer;
         }
 
-        #inputDisplay:hover::after {
-            content: ' (click to edit)';
-            font-size: 0.85em;
-            color: #71a9bf;
-            font-style: italic;
+        #inputOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow: auto;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        #inputText.has-overlay {
+            position: relative;
+            background: transparent;
+            color: transparent;
+            caret-color: #09121f;
+            z-index: 2;
+        }
+
+        .input-wrapper {
+            position: relative;
         }
 
         #outputDisplay {
@@ -577,8 +597,10 @@
                 <div class="section">
                     <div class="section-title">Input Text</div>
                     <div class="text-container" id="inputContainer">
-                        <div id="inputDisplay" class="text-display"></div>
-                        <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
+                        <div class="input-wrapper">
+                            <div id="inputOverlay"></div>
+                            <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
+                        </div>
                     </div>
                 </div>
 
@@ -1091,42 +1113,45 @@
             return div.innerHTML;
         }
 
+        // Store the last highlighted content for comparison
+        let lastHighlightedContent = null;
+
         function displayInput(htmlContent) {
-            const inputDisplay = document.getElementById('inputDisplay');
+            const inputOverlay = document.getElementById('inputOverlay');
             const inputTextarea = document.getElementById('inputText');
-            const inputContainer = document.getElementById('inputContainer');
 
             if (htmlContent && htmlContent.trim()) {
-                inputDisplay.innerHTML = htmlContent;
-                inputDisplay.style.display = 'block';
-                inputTextarea.style.display = 'none';
-                // Match the container height to the textarea's previous height
-                const textareaHeight = inputTextarea.offsetHeight;
-                if (textareaHeight > 0) {
-                    inputContainer.style.height = textareaHeight + 'px';
-                }
+                lastHighlightedContent = htmlContent;
+                inputOverlay.innerHTML = htmlContent;
+                inputTextarea.classList.add('has-overlay');
 
-                // Add click handler to restore editing capability
-                inputDisplay.onclick = function() {
-                    restoreInputEditing();
-                };
+                // Sync scroll between textarea and overlay
+                inputTextarea.addEventListener('scroll', syncOverlayScroll);
+                // Listen for input changes to update overlay
+                inputTextarea.addEventListener('input', syncOverlayContent);
+                syncOverlayScroll();
             } else {
-                inputDisplay.style.display = 'none';
-                inputTextarea.style.display = 'block';
-                inputContainer.style.height = '';
-                inputDisplay.onclick = null;
+                lastHighlightedContent = null;
+                inputOverlay.innerHTML = '';
+                inputTextarea.classList.remove('has-overlay');
+                inputTextarea.removeEventListener('scroll', syncOverlayScroll);
+                inputTextarea.removeEventListener('input', syncOverlayContent);
             }
         }
 
-        function restoreInputEditing() {
-            const inputDisplay = document.getElementById('inputDisplay');
+        function syncOverlayScroll() {
+            const inputOverlay = document.getElementById('inputOverlay');
             const inputTextarea = document.getElementById('inputText');
-            const inputContainer = document.getElementById('inputContainer');
+            inputOverlay.scrollTop = inputTextarea.scrollTop;
+            inputOverlay.scrollLeft = inputTextarea.scrollLeft;
+        }
 
-            inputDisplay.style.display = 'none';
-            inputTextarea.style.display = 'block';
-            inputContainer.style.height = '';
-            inputTextarea.focus();
+        function syncOverlayContent() {
+            const inputOverlay = document.getElementById('inputOverlay');
+            const inputTextarea = document.getElementById('inputText');
+
+            // Show the plain text as user types (highlighting removed until next sanitize/desanitize)
+            inputOverlay.textContent = inputTextarea.value;
         }
 
         function displayOutput(htmlContent) {
@@ -1156,9 +1181,11 @@
         }
 
         function clearAll() {
-            document.getElementById('inputText').value = '';
+            const inputTextarea = document.getElementById('inputText');
+            inputTextarea.value = '';
+            inputTextarea.classList.remove('has-overlay');
+            document.getElementById('inputOverlay').innerHTML = '';
             document.getElementById('outputText').value = '';
-            displayInput('');
             displayOutput('');
             document.getElementById('replacementCount').textContent = '0';
             showToast('✓ Cleared all fields', 'success');
