@@ -271,6 +271,8 @@
 
         .btn-add-mapping:hover {
             background: #334054;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(65, 81, 105, 0.4);
         }
 
         textarea {
@@ -385,6 +387,25 @@
             }
         }
 
+        .redacted {
+            background: #09121f;
+            color: #09121f;
+            padding: 2px 4px;
+            border-radius: 3px;
+            cursor: pointer;
+            user-select: none;
+            transition: opacity 0.2s;
+        }
+
+        .redacted:hover {
+            opacity: 0.7;
+        }
+
+        .redacted.revealed {
+            background: #985fb9;
+            color: white;
+        }
+
         .buttons {
             display: flex;
             gap: 12px;
@@ -431,6 +452,16 @@
 
         .btn-clear:hover {
             background: #334054;
+        }
+
+        .btn-redact {
+            background: #09121f;
+            color: white;
+        }
+
+        .btn-redact:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(9, 18, 31, 0.4);
         }
 
         .btn-copy {
@@ -607,6 +638,11 @@
                             <textarea id="inputText" rows="10" placeholder="Enter your text here..."></textarea>
                         </div>
                     </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px; margin-bottom: 15px;">
+                    <button class="btn-redact" onclick="redactSelected()" style="flex: 1; padding: 10px 20px; min-width: auto;">⬛ Redact Selected</button>
+                    <button class="btn-add-mapping" onclick="addSelectedAsMapping()" style="flex: 1; padding: 10px 20px; min-width: auto; background: #415169; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.95em; transition: all 0.3s;">➕ Add as Mapping</button>
                 </div>
 
                 <div class="section">
@@ -1140,6 +1176,145 @@
             showToast(`✓ Desanitized! ${count} replacement(s) made`, 'success');
         }
 
+        function addSelectedAsMapping() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount || selection.isCollapsed) {
+                showToast('Please select text in the output to add as mapping', 'warning');
+                return;
+            }
+
+            const outputDisplay = document.getElementById('outputDisplay');
+            const range = selection.getRangeAt(0);
+
+            // Check if selection is within the output display
+            if (!outputDisplay.contains(range.commonAncestorContainer)) {
+                showToast('Please select text in the output area', 'warning');
+                return;
+            }
+
+            const selectedText = selection.toString();
+            if (!selectedText.trim()) {
+                showToast('Please select some text to add as mapping', 'warning');
+                return;
+            }
+
+            // Check if a mapping set exists
+            if (!currentSetId) {
+                showToast('Please create a mapping set first', 'warning');
+                selection.removeAllRanges();
+                return;
+            }
+
+            // Check if this text already exists in mappings
+            const existingMapping = mappingSets[currentSetId].mappings.find(
+                m => m.original.toLowerCase() === selectedText.toLowerCase()
+            );
+
+            if (existingMapping) {
+                showToast('This text is already in your mappings', 'warning');
+                selection.removeAllRanges();
+                return;
+            }
+
+            // Generate the next reference number
+            const currentMappings = mappingSets[currentSetId].mappings;
+            const nextRefNumber = currentMappings.length + 1;
+
+            // Add the new mapping at the beginning
+            mappingSets[currentSetId].mappings.unshift({
+                original: selectedText,
+                replacement: `{ref ${nextRefNumber}}`
+            });
+
+            saveToStorage();
+            renderMappingEditor(currentSetId);
+            renderMappingSets();
+
+            // Clear the selection
+            selection.removeAllRanges();
+
+            showToast(`✓ Added "${selectedText}" as mapping`, 'success');
+        }
+
+        function redactSelected() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount || selection.isCollapsed) {
+                showToast('Please select text in the output to redact', 'warning');
+                return;
+            }
+
+            const outputDisplay = document.getElementById('outputDisplay');
+            const range = selection.getRangeAt(0);
+
+            // Check if selection is within the output display
+            if (!outputDisplay.contains(range.commonAncestorContainer)) {
+                showToast('Please select text in the output area', 'warning');
+                return;
+            }
+
+            try {
+                // Get the selected text
+                const selectedText = selection.toString();
+                if (!selectedText.trim()) {
+                    showToast('Please select some text to redact', 'warning');
+                    return;
+                }
+
+                // Create a redacted span element
+                const redactedSpan = document.createElement('span');
+                redactedSpan.className = 'redacted';
+                redactedSpan.setAttribute('data-original', selectedText);
+                redactedSpan.textContent = '█'.repeat(Math.max(selectedText.length, 8));
+                redactedSpan.onclick = toggleRedaction;
+
+                // Replace the selected content with the redacted span
+                range.deleteContents();
+                range.insertNode(redactedSpan);
+
+                // Update the underlying output text value
+                updateOutputTextFromDisplay();
+
+                // Clear the selection
+                selection.removeAllRanges();
+
+                showToast('✓ Text redacted! Click to reveal', 'success');
+            } catch (error) {
+                console.error('Redaction error:', error);
+                showToast('Error redacting text', 'error');
+            }
+        }
+
+        function toggleRedaction(event) {
+            const redactedSpan = event.target;
+            if (!redactedSpan.classList.contains('redacted')) return;
+
+            redactedSpan.classList.toggle('revealed');
+
+            if (redactedSpan.classList.contains('revealed')) {
+                // Show original text
+                redactedSpan.textContent = redactedSpan.getAttribute('data-original');
+            } else {
+                // Show redacted version
+                const originalLength = redactedSpan.getAttribute('data-original').length;
+                redactedSpan.textContent = '█'.repeat(Math.max(originalLength, 8));
+            }
+        }
+
+        function updateOutputTextFromDisplay() {
+            const outputDisplay = document.getElementById('outputDisplay');
+            const outputText = document.getElementById('outputText');
+
+            // Extract text content, replacing redacted spans with [REDACTED]
+            const clonedContent = outputDisplay.cloneNode(true);
+            const redactedSpans = clonedContent.querySelectorAll('.redacted');
+
+            redactedSpans.forEach(span => {
+                span.textContent = '[REDACTED]';
+            });
+
+            outputText.value = clonedContent.textContent || clonedContent.innerText || '';
+        }
+
         function escapeRegex(string) {
             return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
@@ -1204,6 +1379,9 @@
         }
 
         function copyOutput() {
+            // Update the output text from display first to ensure redactions are included
+            updateOutputTextFromDisplay();
+
             const output = document.getElementById('outputText').value;
             if (!output.trim()) {
                 showToast('Nothing to copy', 'warning');
